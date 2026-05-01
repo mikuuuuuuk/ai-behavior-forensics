@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThoughtTrace | Integrity Audit Framework</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; overflow-x: hidden; }
+        .glass-card { background: #0f172a; border: 1px solid #1e293b; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .status-light { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all 0.3s; }
+        #calibration-overlay { backdrop-filter: blur(15px); }
+        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-6 lg:p-12">
+
+    <div id="calibration-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+        <div class="glass-card p-10 rounded-[2rem] max-w-lg w-full text-center">
+            <i data-lucide="shield-check" class="w-12 h-12 text-blue-500 mx-auto mb-4"></i>
+            <h2 class="text-2xl font-black uppercase mb-4 tracking-tighter">Initial Calibration</h2>
+            <p class="text-xs text-slate-400 mb-8 leading-relaxed">Please type the following sentence to establish your unique typing fingerprint (Jitter Baseline).</p>
+            <div class="bg-black/50 p-5 rounded-2xl border border-blue-500/30 mb-6 select-none">
+                <span class="text-blue-400 font-bold mono italic">the quick brown fox jumps over the lazy dog</span>
+            </div>
+            <input type="text" id="cal-input" class="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 p-4 rounded-xl text-white outline-none mono text-center mb-2" placeholder="Start typing..." autocomplete="off">
+            <p id="cal-progress" class="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Awaiting Input Sequence</p>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <div class="lg:col-span-4 space-y-6">
+            <div class="glass-card p-8 rounded-[2rem]">
+                <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-8">AI Diagnostic Engine</h3>
+                
+                <div class="mb-10">
+                    <div class="flex items-baseline gap-2">
+                        <span id="score-val" class="text-8xl font-black italic tracking-tighter text-slate-800">--</span>
+                        <span class="text-3xl font-black text-slate-800">%</span>
+                    </div>
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-2">Integrity Score</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-white/5">
+                        <span class="text-[10px] font-bold text-slate-500">BASELINE CV</span>
+                        <span id="base-cv" class="text-sm font-black mono text-blue-500">0.000</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-white/5">
+                        <span class="text-[10px] font-bold text-slate-500">CURRENT CV</span>
+                        <span id="curr-cv" class="text-sm font-black mono">0.000</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-red-500/10">
+                        <span class="text-[10px] font-bold text-red-500">FOCUS LOST</span>
+                        <span id="blur-count" class="text-sm font-black mono text-red-500">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card p-6 rounded-[2rem]">
+                <canvas id="speedChart" style="max-height: 110px;"></canvas>
+            </div>
+        </div>
+
+        <div class="lg:col-span-8 space-y-6">
+            <header class="flex justify-between items-center glass-card p-6 rounded-2xl px-10">
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-600 p-2 rounded-lg"><i data-lucide="zap" class="w-5 h-5 text-white"></i></div>
+                    <h2 class="text-xl font-black uppercase italic tracking-tighter">ThoughtTrace <span class="font-normal text-blue-500">v2.8</span></h2>
+                </div>
+                <div class="flex items-center gap-3 px-4 py-2 bg-black/40 rounded-full border border-white/5">
+                    <span id="status-dot" class="status-light bg-slate-700"></span>
+                    <span id="status-text" class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Standby</span>
+                </div>
+            </header>
+
+            <div class="glass-card rounded-[2.5rem] overflow-hidden h-[600px] flex flex-col">
+                <textarea id="editor" disabled
+                    class="w-full flex-1 bg-transparent p-12 text-xl text-slate-200 outline-none resize-none leading-relaxed font-light"
+                    placeholder="Complete calibration to begin session..."></textarea>
+                
+                <div class="p-8 bg-black/40 border-t border-white/5 flex justify-between items-center">
+                    <div class="flex gap-4">
+                        <button id="run-diag" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-900/20 transition-all">
+                            Run Analysis
+                        </button>
+                        <button onclick="exportAuditPDF()" class="bg-white text-black hover:bg-slate-200 px-10 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
+                            Audit Report
+                        </button>
+                    </div>
+                    <button onclick="resetSession()" class="text-[10px] font-bold text-slate-600 hover:text-red-500 uppercase">Reset Session</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const { jsPDF } = window.jspdf;
+
+        // --- Core State ---
+        let session = JSON.parse(localStorage.getItem('tt_v28_final')) || {
+            logs: [], events: [], blurCount: 0, 
+            baseline: { active: false, cv: 0 },
+            content: ""
+        };
+
+        const editor = document.getElementById('editor');
+        const calInput = document.getElementById('cal-input');
+        let lastKeyTime = Date.now();
+        let calLogs = [];
+        let calLastTime = Date.now();
+
+        // --- Chart Config ---
+        const ctx = document.getElementById('speedChart').getContext('2d');
+        const speedChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: Array(30).fill(''), datasets: [{ data: [], borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.05)' }] },
+            options: { plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false, max: 2000 } }, responsive: true }
+        });
+
+        // --- 1. Calibration Setup ---
+        if (session.baseline.active) {
+            unlockEditor();
+        }
+
+        calInput.addEventListener('keydown', (e) => {
+            const delay = Date.now() - calLastTime;
+            calLastTime = Date.now();
+            if (e.key.length === 1) calLogs.push(delay);
+        });
+
+        calInput.addEventListener('input', () => {
+            const target = "the quick brown fox jumps over the lazy dog";
+            if (calInput.value.trim().toLowerCase() === target) {
+                const delays = calLogs.filter(d => d > 30 && d < 1000);
+                const mean = delays.reduce((a,b)=>a+b, 0) / delays.length;
+                const std = Math.sqrt(delays.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b,0)/delays.length);
+                
+                session.baseline = { active: true, cv: std/mean };
+                saveState();
+                unlockEditor();
+            }
+        });
+
+        function unlockEditor() {
+            document.getElementById('calibration-overlay').style.display = 'none';
+            document.getElementById('base-cv').innerText = session.baseline.cv.toFixed(3);
+            editor.disabled = false;
+            editor.value = session.content;
+            document.getElementById('blur-count').innerText = session.blurCount;
+        }
+
+        // --- 2. Focus & Input Monitoring ---
+        window.addEventListener('blur', () => {
+            if (!session.baseline.active) return;
+            session.blurCount++;
+            document.getElementById('blur-count').innerText = session.blurCount;
+            logEvent('FOCUS_LOST', 'User switched window/tab during session.');
+            saveState();
+        });
+
+        editor.addEventListener('keydown', (e) => {
+            const now = Date.now();
+            const delay = now - lastKeyTime;
+            lastKeyTime = now;
+
+            if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+            session.logs.push({ key: e.key, delay, ts: now, isRev: ['Backspace', 'Delete'].includes(e.key) });
+            if(session.logs.length > 2500) session.logs.shift();
+
+            updateVisuals(delay);
+            setStatus('typing');
+            
+            clearTimeout(window.idleTimer);
+            window.idleTimer = setTimeout(() => setStatus('idle'), 1500);
+        });
+
+        editor.addEventListener('paste', () => {
+            logEvent('MASSIVE_PASTE', 'Large clipboard injection detected.');
+        });
+
+        // --- 3. Diagnostics Logic ---
+        document.getElementById('run-diag').addEventListener('click', () => {
+            if(session.logs.length < 30) return alert("Insufficient data points.");
+            
+            const valid = session.logs.filter(l => l.delay > 30 && l.delay < 3000).slice(-150);
+            const delays = valid.map(l => l.delay);
+            const mean = delays.reduce((a,b)=>a+b)/delays.length;
+            const cv = Math.sqrt(delays.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b)/delays.length) / mean;
+            
+            const recordedKeys = session.logs.filter(l => !l.isRev && l.key.length === 1).length;
+            const coverage = Math.min(1.1, recordedKeys / (editor.value.trim().length || 1));
+
+            let score = 70;
+            // Penalties
+            if(coverage < 0.8) score -= 45;
+            if(session.blurCount > 2) score -= (session.blurCount * 5);
+            
+            // Baseline Comparison
+            const delta = Math.abs(cv - session.baseline.cv);
+            if(delta > 0.4) score -= 20; else score += 10;
+
+            score = Math.round(Math.max(5, Math.min(99, score)));
+
+            const gauge = document.getElementById('score-val');
+            gauge.innerText = score;
+            gauge.className = `text-8xl font-black italic tracking-tighter ${score > 60 ? 'text-blue-500' : 'text-red-500'}`;
+            document.getElementById('curr-cv').innerText = cv.toFixed(3);
+        });
+
+        // --- Helpers ---
+        function setStatus(s) {
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            dot.className = `status-light ${s === 'typing' ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-slate-700'}`;
+            txt.innerText = s === 'typing' ? 'Analyzing Flow' : 'Monitoring Standby';
+        }
+
+        function updateVisuals(delay) {
+            speedChart.data.datasets[0].data.push(delay);
+            if(speedChart.data.datasets[0].data.length > 30) speedChart.data.datasets[0].data.shift();
+            speedChart.update('none');
+            saveState();
+        }
+
+        function logEvent(type, desc) {
+            const ts = new Date().toLocaleTimeString();
+            session.events.push({ type, desc, ts });
+            const node = document.createElement('div');
+            node.className = 'text-[9px] mono border-l-2 border-blue-500/30 pl-3 mb-2';
+            node.innerHTML = `<span class="text-blue-500 font-bold">${type}</span> - ${desc} <span class="text-slate-700 ml-1">${ts}</span>`;
+            document.getElementById('audit-trail').prepend(node);
+        }
+
+        function exportAuditPDF() {
+            const doc = new jsPDF();
+            doc.setFillColor(2, 6, 23); doc.rect(0, 0, 210, 297, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22);
+            doc.text("Forensic Writing Audit", 20, 30);
+            
+            doc.setFontSize(9); doc.setTextColor(59, 130, 246);
+            doc.text(`SESSION_ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}`, 20, 42);
+            doc.text(`TAB_SWITCH_COUNT: ${session.blurCount}`, 20, 48);
+            
+            doc.setTextColor(200); doc.setFontSize(11);
+            doc.text("Behavioral Logs:", 20, 65);
+            let y = 75;
+            session.events.slice(-15).forEach(e => {
+                doc.setFontSize(8); doc.text(`${e.ts} [${e.type}] ${e.desc}`, 20, y); y += 8;
+            });
+            
+            doc.save("ThoughtTrace_Audit.pdf");
+        }
+
+        function saveState() {
+            session.content = editor.value;
+            localStorage.setItem('tt_v28_final', JSON.stringify(session));
+        }
+
+        function resetSession() {
+            if(confirm("Confirm Factory Reset?")) { localStorage.removeItem('tt_v28_final'); location.reload(); }
+        }
+    </script>
+</body>
+</html>
